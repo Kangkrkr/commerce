@@ -1,1 +1,8 @@
-rootProject.name = 'commerce'
+rootProject.name = 'commerce-backend'
+
+include 'commerce-core'
+include 'service-gateway'
+include 'service-user'
+include 'service-post'
+include 'service-feed'
+include 'service-search'
