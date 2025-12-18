@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # 1. RDBMS: MySQL (Main Database)
+  mysql:
+    image: mysql:8.0
+    container_name: commerce-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: commerce
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+      TZ: Asia/Seoul
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./docker-data/mysql:/var/lib/mysql
+      - ./docker-init/mysql:/docker-entrypoint-initdb.d # 초기 SQL 스크립트 위치
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    networks:
+      - commerce-net
+
+  # 2. Cache & Lock: Redis
+  redis:
+    image: redis:7.0
+    container_name: commerce-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./docker-data/redis:/data
+    command: redis-server --requirepass password
+    networks:
+      - commerce-net
+
+  # 3. NoSQL: MongoDB (Log, Comments)
+  mongodb:
+    image: mongo:6.0
+    container_name: commerce-mongo
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./docker-data/mongo:/data/db
+    networks:
+      - commerce-net
+
+  # 4. Message Queue: Apache Kafka (Official Image - KRaft Mode)
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: commerce-kafka
+    restart: always
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft settings for official apache/kafka image
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@localhost:9093'
+      KAFKA_LISTENERS: 'PLAINTEXT://:9092,CONTROLLER://:9093'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    volumes:
+      - ./docker-data/kafka:/var/lib/kafka/data
+    networks:
+      - commerce-net
+
+  # 5. Search Engine: Elasticsearch (Single Node)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    container_name: commerce-es
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false # 개발 편의를 위해 보안 비활성화
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m" # 메모리 제한
+    ports:
+      - "9200:9200"
+    volumes:
+      - ./docker-data/es:/usr/share/elasticsearch/data
+    networks:
+      - commerce-net
+    mem_limit: 1g # 컨테이너 메모리 제한
+
+networks:
+  commerce-net:
+    driver: bridge
